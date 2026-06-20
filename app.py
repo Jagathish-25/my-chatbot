@@ -126,5 +126,19 @@ def new_chat():
     return "OK"
 
 
+@app.route("/resetdb")
+def reset_db():
+
+    conn = sqlite3.connect("chatbot.db")
+    cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM messages")
+
+    conn.commit()
+    conn.close()
+
+    return "Database cleared"
+
+
 if __name__ == "__main__":
     app.run(debug=True)
