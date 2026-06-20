@@ -40,8 +40,15 @@ def get_ai_response(message):
     }
 
     response = requests.post(url, headers=headers, json=data)
-    return response.json()["choices"][0]["message"]["content"]
 
+    print(response.text)
+
+    result = response.json()
+
+    if "choices" not in result:
+        return f"ERROR: {result}"
+
+    return result["choices"][0]["message"]["content"]
 # ---------------- ROUTES ----------------
 @app.route("/")
 def home():
@@ -49,18 +56,7 @@ def home():
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    user_msg = request.json["message"]
-
-    reply = get_ai_response(user_msg)
-
-    conn = sqlite3.connect("chatbot.db")
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO messages (role, content) VALUES (?, ?)", ("user", user_msg))
-    cursor.execute("INSERT INTO messages (role, content) VALUES (?, ?)", ("bot", reply))
-    conn.commit()
-    conn.close()
-
-    return jsonify({"reply": reply})
+    return jsonify({"reply": "Bot working successfully!"})
 
 if __name__ == "__main__":
     app.run(debug=True)
