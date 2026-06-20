@@ -1,95 +1,33 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Ultimate ChatGPT Clone</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <title>My Chatbot</title>
 </head>
-
 <body>
 
-<div class="app">
+<h2>🤖 My Chatbot</h2>
 
-    <!-- SIDEBAR -->
-    <div class="sidebar">
+<div id="chat"></div>
 
-        <button onclick="newChat()">+ New Chat</button>
-
-        <div id="chatList"></div>
-
-    </div>
-
-    <!-- CHAT AREA -->
-    <div class="main">
-
-        <div id="chatBox"></div>
-
-        <div class="inputBox">
-            <input id="input" placeholder="Ask anything...">
-            <button onclick="send()">Send</button>
-        </div>
-
-    </div>
-
-</div>
+<input id="msg" placeholder="Type message...">
+<button onclick="send()">Send</button>
 
 <script>
+function send(){
+    let msg = document.getElementById("msg").value;
 
-// ENTER
-document.getElementById("input").addEventListener("keydown", e=>{
-    if(e.key==="Enter") send();
-});
-
-// SEND (STREAM)
-async function send(){
-
-    let input = document.getElementById("input");
-    let msg = input.value.trim();
-    if(!msg) return;
-
-    add("user", msg);
-    input.value = "";
-
-    let bot = add("bot", "🤖 ");
-
-    const res = await fetch("/chat", {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({message:msg})
+    fetch("/chat", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({message: msg})
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById("chat").innerHTML +=
+        "<p><b>You:</b> " + msg + "</p>" +
+        "<p><b>Bot:</b> " + data.reply + "</p>";
     });
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-
-    while(true){
-        const {value,done} = await reader.read();
-        if(done) break;
-        bot.innerHTML += decoder.decode(value);
-        scroll();
-    }
 }
-
-// ADD MSG
-function add(role,text){
-    let div = document.createElement("div");
-    div.className = role;
-    div.innerHTML = text;
-    document.getElementById("chatBox").appendChild(div);
-    scroll();
-    return div;
-}
-
-// SCROLL
-function scroll(){
-    let b = document.getElementById("chatBox");
-    b.scrollTop = b.scrollHeight;
-}
-
-// NEW CHAT
-async function newChat(){
-    await fetch("/newchat");
-    document.getElementById("chatBox").innerHTML="";
-}
-
 </script>
 
 </body>

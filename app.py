@@ -1,116 +1,66 @@
-from flask import Flask, render_template, request, jsonify, session
-import sqlite3, requests, uuid
+from flask import Flask, render_template, request, jsonify
+import requests
+import sqlite3
+import os
 
 app = Flask(__name__)
-app.secret_key = "supersecret"
+
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 # ---------------- DB ----------------
 def init_db():
     conn = sqlite3.connect("chatbot.db")
-    cur = conn.cursor()
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS chats (
-            id TEXT,
-            user TEXT,
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             role TEXT,
             content TEXT
         )
     """)
-
     conn.commit()
     conn.close()
 
 init_db()
 
-# ---------------- HOME ----------------
+# ---------------- AI CALL ----------------
+def get_ai_response(message):
+    url = "https://api.groq.com/openai/v1/chat/completions"
+
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "model": "llama3-8b-8192",
+        "messages": [
+            {"role": "user", "content": message}
+        ]
+    }
+
+    response = requests.post(url, headers=headers, json=data)
+    return response.json()["choices"][0]["message"]["content"]
+
+# ---------------- ROUTES ----------------
 @app.route("/")
 def home():
-    if "user" not in session:
-        session["user"] = "user_" + str(uuid.uuid4())[:6]
-
-    if "chat_id" not in session:
-        session["chat_id"] = str(uuid.uuid4())
-
     return render_template("index.html")
 
-# ---------------- NEW CHAT ----------------
-@app.route("/newchat")
-def newchat():
-    session["chat_id"] = str(uuid.uuid4())
-    return jsonify({"ok": True})
-
-# ---------------- GET CHATS ----------------
-@app.route("/get_chats")
-def get_chats():
-    user = session["user"]
-
-    conn = sqlite3.connect("chatbot.db")
-    cur = conn.cursor()
-
-    cur.execute("SELECT DISTINCT id FROM chats WHERE user=?", (user,))
-    chats = cur.fetchall()
-
-    conn.close()
-
-    return jsonify(chats)
-
-# ---------------- LOAD CHAT ----------------
-@app.route("/load/<chat_id>")
-def load(chat_id):
-    conn = sqlite3.connect("chatbot.db")
-    cur = conn.cursor()
-
-    cur.execute("SELECT role, content FROM chats WHERE id=? ORDER BY rowid", (chat_id,))
-    data = cur.fetchall()
-
-    conn.close()
-
-    return jsonify(data)
-
-# ---------------- CHAT STREAM ----------------
 @app.route("/chat", methods=["POST"])
 def chat():
     user_msg = request.json["message"]
-    chat_id = session["chat_id"]
-    user = session["user"]
 
-    def generate():
+    reply = get_ai_response(user_msg)
 
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json={
-                "model": "llama3",
-                "prompt": user_msg,
-                "stream": True
-            },
-            stream=True
-        )
+    conn = sqlite3.connect("chatbot.db")
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO messages (role, content) VALUES (?, ?)", ("user", user_msg))
+    cursor.execute("INSERT INTO messages (role, content) VALUES (?, ?)", ("bot", reply))
+    conn.commit()
+    conn.close()
 
-        full = ""
-
-        for line in response.iter_lines():
-            if line:
-                import json
-                data = json.loads(line.decode("utf-8"))
-                chunk = data.get("response", "")
-                full += chunk
-                yield chunk
-
-        # save
-        conn = sqlite3.connect("chatbot.db")
-        cur = conn.cursor()
-
-        cur.execute("INSERT INTO chats VALUES (?,?,?,?)",
-                    (chat_id, user, "user", user_msg))
-
-        cur.execute("INSERT INTO chats VALUES (?,?,?,?)",
-                    (chat_id, user, "bot", full))
-
-        conn.commit()
-        conn.close()
-
-    return app.response_class(generate(), mimetype="text/plain")
+    return jsonify({"reply": reply})
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(debug=True)
