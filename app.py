@@ -22,9 +22,45 @@ def init_db():
     conn.close()
 
 init_db()
+def load_history():
+    conn = sqlite3.connect("chatbot.db")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT role, content
+        FROM messages
+        ORDER BY id ASC
+        LIMIT 20
+    """)
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    messages = [
+        {
+            "role": "system",
+            "content": "You are a helpful AI assistant."
+        }
+    ]
+
+    for role, content in rows:
+        messages.append({
+            "role": "assistant" if role == "bot" else "user",
+            "content": content
+        })
+
+    return messages
 
 # ---------------- AI CALL ----------------
 def get_ai_response(message):
+
+    messages = load_history()
+
+    messages.append({
+        "role": "user",
+        "content": message
+    })
+
     url = "https://api.groq.com/openai/v1/chat/completions"
 
     headers = {
@@ -34,15 +70,10 @@ def get_ai_response(message):
 
     data = {
         "model": "llama-3.3-70b-versatile",
-        "messages": [
-            {"role": "user", "content": message}
-        ]
+        "messages": messages
     }
 
     response = requests.post(url, headers=headers, json=data)
-
-    print("STATUS:", response.status_code)
-    print("BODY:", response.text)
 
     result = response.json()
 
