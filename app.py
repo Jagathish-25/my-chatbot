@@ -39,7 +39,10 @@ def load_history():
     messages = [
         {
             "role": "system",
-            "content": "You are a helpful AI assistant."
+            "content": """You are a helpful AI assistant.
+Only use information explicitly provided by the user.
+Do not invent facts or personal details.
+If you don't know something, say you don't know."""
         }
     ]
 
@@ -108,5 +111,20 @@ def chat():
     conn.close()
 
     return jsonify({"reply": reply})
+
+@app.route("/newchat")
+def new_chat():
+
+    conn = sqlite3.connect("chatbot.db")
+    cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM messages")
+
+    conn.commit()
+    conn.close()
+
+    return "OK"
+
+
 if __name__ == "__main__":
     app.run(debug=True)
